@@ -1,0 +1,13 @@
+.DS_Store
+*.o
+*.d
+compile_commands.json
+.cache/
+*.sqlite3
+*.sqlite3-journal
+*.dSYM
+*.log
+*.icloud
+analyze
+analyze_debug
+migrate_hands_to_blob
