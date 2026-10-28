@@ -135,6 +135,9 @@ void evalGame(const std::string &filename) {
 	stats.clear();
 	for (const auto &row : rows) {
 		stats.add(row.stats, row.multiplier);
+		if (row.stats.outcomes[3].getTotal()) {
+			cout << PREFLOP_PLAY_X << "x " << row.holecards << endl;
+		}
 	}
 	double ev;
 	ev = stats.getEV(true);
@@ -144,6 +147,6 @@ void evalGame(const std::string &filename) {
 
 int main() {
 	//buildStartingHands(poker::FULL_DECK, "bb_uth3x.sqlite3");
-	fillRows("bb_uth3x.sqlite3");
-	//evalGame("bb_uth3x.sqlite3");
+	//fillRows("bb_uth3x.sqlite3");
+	evalGame("bb_uth4x.sqlite3");
 }

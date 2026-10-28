@@ -3,9 +3,9 @@
 
 using namespace poker;
 
-uint64_t UltimateTexasHoldem::Outcomes::getTotal() {
+uint64_t UltimateTexasHoldem::Outcomes::getTotal() const {
 	uint64_t total = 0;
-	uint64_t *src = reinterpret_cast<uint64_t *>(this);
+	const uint64_t *src = reinterpret_cast<const uint64_t *>(this);
 	for (int i=0; i<elements(); i++) {
 		total += src[i];
 	}
@@ -26,7 +26,7 @@ void UltimateTexasHoldem::Outcomes::add(const Outcomes &other, int mult) {
 	}
 }
 
-uint64_t UltimateTexasHoldem::Stats::getTotal() {
+uint64_t UltimateTexasHoldem::Stats::getTotal() const {
 	uint64_t total = 0;
 	for (int i = 0; i < 4; i++) {
 		total += outcomes[i].getTotal();

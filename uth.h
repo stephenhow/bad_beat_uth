@@ -5,7 +5,7 @@
 #include <utility>
 
 #define ENABLE_BAD_BEAT true
-#define PREFLOP_PLAY_X 3
+#define PREFLOP_PLAY_X 4
 
 class UltimateTexasHoldem {
 protected:
@@ -13,7 +13,7 @@ protected:
 public:
 	struct Outcomes {
 		uint64_t wins[poker::Hand::ROYAL_FLUSH+1][2], losses[poker::Hand::ROYAL_FLUSH+1][2], ties;
-		uint64_t getTotal();
+		uint64_t getTotal() const;
 		double getEV(int play, bool verbose=false);
 		void add(const Outcomes &src, int mult=1);
 		static int elements();
@@ -22,7 +22,7 @@ public:
 	struct Stats {
 		Outcomes outcomes[4];	// [0x, 1x, 2x, 4x]
 		//void addFrom(Stats &other);
-		uint64_t getTotal();
+		uint64_t getTotal() const;
 		double getEV(bool verbose=false);
 		void addOutcomes(int n, const Outcomes &src);
 		Outcomes getFlattened();
