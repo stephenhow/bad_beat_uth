@@ -16,13 +16,13 @@ int UltimateTexasHoldem::Outcomes::elements() {
 	return (sizeof(Outcomes)/sizeof(uint64_t));
 }
 
-void UltimateTexasHoldem::Outcomes::add(const Outcomes &other) {
+void UltimateTexasHoldem::Outcomes::add(const Outcomes &other, int mult) {
 	// treat both structs as flat arrays of uint64_t counters
 	static_assert(sizeof(Outcomes) % sizeof(uint64_t) == 0, "Outcomes must contain only uint64_t members");
 	uint64_t *dst = reinterpret_cast<uint64_t *>(this);
 	const uint64_t *src = reinterpret_cast<const uint64_t *>(&other);
 	for (int i=0; i<elements(); i++) {
-		dst[i] += src[i];
+		dst[i] += mult*src[i];
 	}
 }
 
@@ -34,9 +34,13 @@ uint64_t UltimateTexasHoldem::Stats::getTotal() {
 	return total;
 }
 
+void UltimateTexasHoldem::Stats::clear() {
+	memset(this, 0, sizeof(Stats));
+}
+
 UltimateTexasHoldem::Outcomes UltimateTexasHoldem::Stats::getFlattened() {
 	Outcomes outcomes;
-	memset(&outcomes, 0, sizeof(Outcomes));
+	outcomes.clear();
 	for (int p=3; p>=0; p--) {
 		outcomes.add(this->outcomes[p]);
 	}
@@ -45,6 +49,16 @@ UltimateTexasHoldem::Outcomes UltimateTexasHoldem::Stats::getFlattened() {
 
 void UltimateTexasHoldem::Stats::addOutcomes(int n, const Outcomes &src) {
 	outcomes[n].add(src);
+}
+
+void UltimateTexasHoldem::Stats::add(const Stats &src, int mult) {
+	for (int p=3; p>=0; p--) {
+		this->outcomes[p].add(src.outcomes[p], mult);
+	}
+}
+
+void UltimateTexasHoldem::Outcomes::clear() {
+	memset(this, 0, sizeof(Outcomes));
 }
 
 double UltimateTexasHoldem::Outcomes::getEV(int play, bool verbose) {
@@ -141,6 +155,7 @@ double UltimateTexasHoldem::blindWinPayout(Hand::Rank r) {
 }
 
 double UltimateTexasHoldem::badBeatPayout(Hand::Rank r) {
+	if (!ENABLE_BAD_BEAT) return -1;
 	switch (r) {
 	case Hand::STRAIGHT_FLUSH: return 500;
 	case Hand::FOUR_OF_A_KIND: return 25;
@@ -164,7 +179,7 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 	Outcomes showdowns;
 	Stats stats0x;	// check this street
 	if (board.size() == 0) {
-		memset(&stats0x, 0, sizeof(Stats));
+		stats0x.clear();
 		// for each flop
 		forEachCombination<Card>(deck, 3, [this, &playerHole, &stats0x](const std::vector<Card> &flop) {
 			getStats(playerHole, flop, stats0x);	// add stats for each flop
@@ -173,13 +188,13 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 		showdowns = stats0x.getFlattened();
 		ev4x = showdowns.getEV(getPlay(3));
 		if (ev0x > ev4x) {
-			memcpy(&stats, &stats0x, sizeof(Stats));
+			stats = stats0x;
 		} else {
-			memset(&stats, 0, sizeof(Stats));
+			stats.clear();
 			stats.addOutcomes(3, showdowns);
 		}
 	} else if (board.size() == 3) {
-		memset(&stats0x, 0, sizeof(Stats));
+		stats0x.clear();
 		
 		// for each turn+river
 		forEachCombination<Card>(deck, 2, [this, &playerHole, &board, &stats0x](const std::vector<Card> &turnRiver) {
@@ -202,7 +217,7 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 		player.add(board);
 		player.eval();
 		
-		memset(&showdowns, 0, sizeof(Outcomes));
+		showdowns.clear();
 		Card d0, d1;
 		bool qual;
 		Hand::Rank r;

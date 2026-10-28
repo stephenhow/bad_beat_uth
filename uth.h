@@ -4,6 +4,8 @@
 #include "poker.h"
 #include <utility>
 
+#define ENABLE_BAD_BEAT true
+
 class UltimateTexasHoldem {
 protected:
 	std::vector<std::pair<int, int>> dealerHoles;	// C(45,2) index pairs into the 45 remaining cards
@@ -12,8 +14,9 @@ public:
 		uint64_t wins[poker::Hand::ROYAL_FLUSH+1][2], losses[poker::Hand::ROYAL_FLUSH+1][2], ties;
 		uint64_t getTotal();
 		double getEV(int play, bool verbose=false);
-		void add(const Outcomes &src);
+		void add(const Outcomes &src, int mult=1);
 		static int elements();
+		void clear();
 	};
 	struct Stats {
 		Outcomes outcomes[4];	// [0x, 1x, 2x, 4x]
@@ -22,6 +25,8 @@ public:
 		double getEV(bool verbose=false);
 		void addOutcomes(int n, const Outcomes &src);
 		Outcomes getFlattened();
+		void add(const Stats &src, int mult=1);
+		void clear();
 	};
 	struct Row {
 		int id;

@@ -127,7 +127,22 @@ void fillRows(const std::string &filename) {
 	for (auto &th : threads) th.join();
 }
 
+void evalGame(const std::string &filename) {
+	UltimateTexasHoldem game;
+	Database db(filename);
+	auto rows = readAllRows(db);
+	UltimateTexasHoldem::Stats stats;
+	stats.clear();
+	for (const auto &row : rows) {
+		stats.add(row.stats, row.multiplier);
+	}
+	double ev;
+	ev = stats.getEV(true);
+	std::cout << "EV: " << ev << std::endl;
+}
+
 int main() {
 	//buildStartingHands(poker::FULL_DECK, "uth.sqlite3");
-	fillRows("wolinak.sqlite3");
+	fillRows("bb_uth.sqlite3");
+	//evalGame("bb_uth.sqlite3");
 }
