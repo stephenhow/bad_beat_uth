@@ -139,10 +139,11 @@ void evalGame(const std::string &filename) {
 	double ev;
 	ev = stats.getEV(true);
 	std::cout << "EV: " << ev << std::endl;
+	std::cout << "total: " << stats.getTotal() << std::endl;
 }
 
 int main() {
-	//buildStartingHands(poker::FULL_DECK, "uth.sqlite3");
-	fillRows("bb_uth.sqlite3");
-	//evalGame("bb_uth.sqlite3");
+	//buildStartingHands(poker::FULL_DECK, "bb_uth3x.sqlite3");
+	fillRows("bb_uth3x.sqlite3");
+	//evalGame("bb_uth3x.sqlite3");
 }

@@ -71,14 +71,14 @@ double UltimateTexasHoldem::Outcomes::getEV(int play, bool verbose) {
 			n = this->wins[r][q];
 			outcome = getWin(play, q, rank);
 			if (verbose && (n > 0)) {
-				std::cout << (q ? "Qualified" : "Non-qualified") << " win with " << Hand::rankNames[r] << ", " << n << ", " << outcome << std::endl;
+				std::cout << play << "x " << (q ? "qualified" : "non-qualified") << " win with " << Hand::rankNames[r] << ", " << n << ", " << outcome << std::endl;
 			}
 			ev += (double)n*outcome;
 			// losses
 			n = this->losses[r][q];
 			outcome = getLoss(play, q, rank);
 			if (verbose && (n > 0)) {
-				std::cout << (q ? "Qualified" : "Non-qualified") << " loss with " << Hand::rankNames[r] << ", " << n << ", " << outcome << std::endl;
+				std::cout << play << "x " << (q ? "qualified" : "non-qualified") << " loss with " << Hand::rankNames[r] << ", " << n << ", " << outcome << std::endl;
 			}
 			ev += (double)n*outcome;
 		}
@@ -86,7 +86,7 @@ double UltimateTexasHoldem::Outcomes::getEV(int play, bool verbose) {
 	// ties
 	n = this->ties;
 	if (verbose && (n > 0)) {
-		std::cout << "Ties, " << n << ", 0" << std::endl;
+		std::cout << play << "x tie, " << n << ", 0" << std::endl;
 	}
 	ev /= (double)getTotal();
 	return ev;
@@ -124,7 +124,7 @@ UltimateTexasHoldem::UltimateTexasHoldem() {
 
 int UltimateTexasHoldem::getPlay(int p) {
 	switch (p) {
-	case 3: return 4;
+	case 3: return PREFLOP_PLAY_X;
 	case 2: return 2;
 	case 1: return 1;
 	default:

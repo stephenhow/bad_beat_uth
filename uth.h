@@ -5,6 +5,7 @@
 #include <utility>
 
 #define ENABLE_BAD_BEAT true
+#define PREFLOP_PLAY_X 3
 
 class UltimateTexasHoldem {
 protected:
