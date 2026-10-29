@@ -170,8 +170,8 @@
 		return { ev: { bet: ev2x, check: evCheck }, best: evCheck > ev2x ? 'check' : 'bet', boards, total: all.total };
 	}
 
-	// ---- preflop: precomputed from bb_uth4x.sqlite3 ----
-	// key -> [raise 4x?, EV of raising 4x, EV of checking (only known when checking is best)]
+	// ---- preflop: precomputed from bb_uth.sqlite3 ----
+	// key -> [raise 4x?, EV of raising 4x, EV of checking]
 	let PREFLOP = {};
 	function setPreflopTable(t) { PREFLOP = t; }
 	function handKey(hole) {

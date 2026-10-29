@@ -543,9 +543,8 @@ table.pay tr.hit td { color: var(--brass); }
 			return;
 		}
 		prompt.textContent = g.phase === 'preflop' ? 'Raise 4× or check?' : g.phase === 'flop' ? 'Bet 2× or check?' : 'Bet 1× or fold?';
-		const evText = v => v === null ? 'less than raising' : evSpan(v);
-		box.appendChild(choice(button(st.bet, 'B', () => act('bet'), ''), hints ? evText(d.ev.bet) : null, d.best === 'bet'));
-		box.appendChild(choice(button(st.pass, 'C', () => act(g.phase === 'river' ? 'fold' : 'check'), 'alt'), hints ? evText(d.ev.check) : null, d.best !== 'bet'));
+		box.appendChild(choice(button(st.bet, 'B', () => act('bet'), ''), hints ? evSpan(d.ev.bet) : null, d.best === 'bet'));
+		box.appendChild(choice(button(st.pass, 'C', () => act(g.phase === 'river' ? 'fold' : 'check'), 'alt'), hints ? evSpan(d.ev.check) : null, d.best !== 'bet'));
 	}
 
 	// a button with its EV shown underneath (when EVs are switched on)
@@ -574,11 +573,9 @@ table.pay tr.hit td { color: var(--brass); }
 	}
 
 	function bars(d, chosen, labels) {
-		const vals = [d.ev.bet, d.ev.check].filter(v => v !== null);
-		const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals), span = hi - lo || 1;
+		const lo = Math.min(0, d.ev.bet, d.ev.check), hi = Math.max(0, d.ev.bet, d.ev.check), span = hi - lo || 1;
 		const pos = v => (v - lo) / span * 100;
 		const row = (name, v, best) => {
-			if (v === null) return '<div class="bar"><span>' + name + '</span><span class="note">lower (not stored)</span><span class="v">—</span></div>';
 			const a = pos(Math.min(0, v)), b = pos(Math.max(0, v));
 			return '<div class="bar' + (best ? ' best' : '') + '"><span>' + name + '</span><span class="track"><span class="fill" style="left:' + a + '%;width:' + Math.max(1, b - a) + '%"></span><span class="zero" style="left:' + pos(0) + '%"></span></span><span class="v">' + evSpan(v) + '</span></div>';
 		};
@@ -602,9 +599,7 @@ table.pay tr.hit td { color: var(--brass); }
 				v.textContent = 'Mistake: ' + (last.best === 'bet' ? st.bet : st.pass) + ' was the best play.';
 			}
 			b.innerHTML = bars(last.decision, last.choice, { bet: st.bet, pass: st.pass });
-			if (last.street === 'preflop' && last.decision.ev.check === null) {
-				note.textContent = 'Expected result of the hand with a ' + dollars(curUnit(), false) + ' Ante. Raising is best with this hand, so only the raise EV is stored. Checking is worth less by an amount it doesn\'t record.';
-			} else if (!last.right) {
+			if (!last.right) {
 				note.textContent = 'This decision cost ' + fmt(last.cost, false) + ' in expected value.';
 			} else {
 				note.textContent = 'Expected result of the hand with a ' + dollars(curUnit(), false) + ' Ante, averaged over every way the remaining cards can fall.';
@@ -612,7 +607,7 @@ table.pay tr.hit td { color: var(--brass); }
 		}
 		$('log').innerHTML = g.log.map(e => {
 			const st = STREETS[e.street];
-			const mark = e.right ? '<span class="ok">✓</span>' : '<span class="miss">' + (e.cost !== null ? money(-e.cost) : '✗') + '</span>';
+			const mark = e.right ? '<span class="ok">✓</span>' : '<span class="miss">' + money(-e.cost) + '</span>';
 			return '<div><span class="st">' + st.name + '</span><span>' + (e.choice === 'bet' ? st.bet : st.pass) + '</span>' + mark + '</div>';
 		}).join('');
 	}
@@ -648,8 +643,8 @@ table.pay tr.hit td { color: var(--brass); }
 		const passKey = street === 'river' ? 'fold' : 'check';
 		const evOf = c => c === 'bet' ? d.ev.bet : d.ev.check;
 		const bestChoice = d.best === 'bet' ? 'bet' : passKey;
-		const right = choice === bestChoice || (evOf(choice) !== null && Math.abs(evOf(choice) - evOf(bestChoice)) < 1e-9);
-		const cost = right ? 0 : (evOf(choice) === null ? null : evOf(bestChoice) - evOf(choice));
+		const right = choice === bestChoice || Math.abs(evOf(choice) - evOf(bestChoice)) < 1e-9;
+		const cost = right ? 0 : evOf(bestChoice) - evOf(choice);
 		g.log.push({ street, choice: choice === 'bet' ? 'bet' : 'pass', best: d.best === 'bet' ? 'bet' : 'pass', right, cost, decision: d });
 		session.decisions++; if (right) session.right++; if (cost) session.costDollars += cost * g.unit;
 
