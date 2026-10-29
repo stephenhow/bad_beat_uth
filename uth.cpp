@@ -1,5 +1,6 @@
 #include "uth.h"
 #include <iostream>
+#include <sstream>
 
 using namespace poker;
 
@@ -28,7 +29,7 @@ void UltimateTexasHoldem::Outcomes::add(const Outcomes &other, int mult) {
 
 uint64_t UltimateTexasHoldem::Stats::getTotal() const {
 	uint64_t total = 0;
-	for (int i = 0; i < 4; i++) {
+	for (int i=0; i<=2; i++) {
 		total += outcomes[i].getTotal();
 	}
 	return total;
@@ -38,10 +39,10 @@ void UltimateTexasHoldem::Stats::clear() {
 	memset(this, 0, sizeof(Stats));
 }
 
-UltimateTexasHoldem::Outcomes UltimateTexasHoldem::Stats::getFlattened() {
+UltimateTexasHoldem::Outcomes UltimateTexasHoldem::Stats::getFlattened() const {
 	Outcomes outcomes;
 	outcomes.clear();
-	for (int p=3; p>=0; p--) {
+	for (int p=2; p>=0; p--) {
 		outcomes.add(this->outcomes[p]);
 	}
 	return outcomes;
@@ -52,7 +53,7 @@ void UltimateTexasHoldem::Stats::addOutcomes(int n, const Outcomes &src) {
 }
 
 void UltimateTexasHoldem::Stats::add(const Stats &src, int mult) {
-	for (int p=3; p>=0; p--) {
+	for (int p=2; p>=0; p--) {
 		this->outcomes[p].add(src.outcomes[p], mult);
 	}
 }
@@ -61,7 +62,7 @@ void UltimateTexasHoldem::Outcomes::clear() {
 	memset(this, 0, sizeof(Outcomes));
 }
 
-double UltimateTexasHoldem::Outcomes::getEV(int play, bool verbose) {
+double UltimateTexasHoldem::Outcomes::getEV(int play) const {
 	double ev=0, outcome;
 	uint64_t n;
 	for (int r=Hand::ROYAL_FLUSH; r>=Hand::HIGH_CARD; r--) {
@@ -70,48 +71,111 @@ double UltimateTexasHoldem::Outcomes::getEV(int play, bool verbose) {
 			// wins
 			n = this->wins[r][q];
 			outcome = getWin(play, q, rank);
-			if (verbose && (n > 0)) {
-				std::cout << play << "x " << (q ? "qualified" : "non-qualified") << " win with " << Hand::rankNames[r] << ", " << n << ", " << outcome << std::endl;
-			}
 			ev += (double)n*outcome;
 			// losses
 			n = this->losses[r][q];
 			outcome = getLoss(play, q, rank);
-			if (verbose && (n > 0)) {
-				std::cout << play << "x " << (q ? "qualified" : "non-qualified") << " loss with " << Hand::rankNames[r] << ", " << n << ", " << outcome << std::endl;
-			}
 			ev += (double)n*outcome;
 		}
 	}
 	// ties
 	n = this->ties;
-	if (verbose && (n > 0)) {
-		std::cout << play << "x tie, " << n << ", 0" << std::endl;
-	}
 	ev /= (double)getTotal();
 	return ev;
 }
 
-double UltimateTexasHoldem::Stats::getEV(bool verbose) {
+double UltimateTexasHoldem::Stats::getEV() const {
 	double ev=0;
 	int play;
 	uint64_t n;
-	// 4x / 2x / 1x
-	for (int p=3; p>=1; p--) {
+	// 2x / 1x
+	for (int p=2; p>=1; p--) {
 		play = getPlay(p);
 		n = this->outcomes[p].getTotal();
 		if (n) {
-			ev += (double)n*this->outcomes[p].getEV(play, verbose);
+			ev += (double)n*this->outcomes[p].getEV(play);
 		}
 	}
 	// 0x
 	uint64_t folds = this->outcomes[0].getTotal();
-	if (verbose && (folds > 0)) {
-		std::cout << "Folds, " << folds << ", " << evFold() << std::endl;
-	}
 	ev += (double)folds*evFold();
 	ev /= getTotal();
 	return ev;
+}
+
+std::string UltimateTexasHoldem::getCSV(int play, Outcomes &outcomes, uint64_t total) {
+	std::stringstream csv;
+	uint64_t n;
+	double freq, outcome;
+	if (play == 0) {
+		outcome = evFold();
+		n = outcomes.getTotal();
+		freq = (double)n/(double)total;
+		csv << "Fold, " << n << ", " << freq << ", " << outcome << ", " << outcome*freq << std::endl;
+	} else {
+		for (int r=Hand::ROYAL_FLUSH; r>=Hand::HIGH_CARD; r--) {
+			Hand::Rank rank = static_cast<Hand::Rank>(r);
+			for (int q=1; q>=0; q--) {
+				// wins
+				n = outcomes.wins[r][q];
+				outcome = getWin(play, q, rank);
+				freq = (double)n/(double)total;
+				if (n > 0) {
+					csv << play << "x " << (q ? "qualified" : "non-qualified") << " win with " << Hand::rankNames[r] << ", " << n << ", " << freq << ", " << outcome << ", " << freq*outcome << std::endl;
+				}
+				// losses
+				n = outcomes.losses[r][q];
+				outcome = getLoss(play, q, rank);
+				freq = (double)n/(double)total;
+				if (n > 0) {
+					csv << play << "x " << (q ? "qualified" : "non-qualified") << " loss with " << Hand::rankNames[r] << ", " << n << ", " << freq << ", " << outcome << ", " << freq*outcome << std::endl;
+				}
+			}
+		}
+		// ties
+		csv << play << "x Ties, " << outcomes.ties << ", " << (double)outcomes.ties/(double)total << ", 0, 0" << std::endl;
+	}
+	return csv.str();
+}
+
+std::string UltimateTexasHoldem::getCSV(std::vector<Row> &rows) {
+	std::stringstream csv;
+	Outcomes outcomes4x = {};	// preflop play
+	Stats stats0x = {};	// preflop check
+	Outcomes showdowns;
+	double ev4x, ev0x, ev=0;
+	uint64_t total=0;
+	int startingHands=0;
+	csv << "Outcome, Combinations, Frequency, Net, Return" << std::endl;
+	for (auto const &row : rows) {
+		showdowns = row.stats.getFlattened();
+		total += row.multiplier*showdowns.getTotal();
+		startingHands += row.multiplier;
+		ev4x = showdowns.getEV(getPlay(BET_PREFLOP));
+		ev0x = row.stats.getEV();
+		if (ev4x > ev0x) {
+			outcomes4x.add(showdowns, row.multiplier);
+			ev += ev4x*row.multiplier;
+		} else {
+			stats0x.add(row.stats, row.multiplier);
+			ev += ev0x*row.multiplier;
+		}
+	}
+	// 4x
+	csv << getCSV(getPlay(BET_PREFLOP), outcomes4x, total);
+	// 2x, 1x, fold
+	for (int p=2; p>=0; p--) {
+		csv << getCSV(getPlay(p), stats0x.outcomes[p], total);
+	}
+	ev /= (double)startingHands;
+	csv << "Total, " << total << ", 1, ," << ev << std::endl; 
+	return csv.str();
+}
+
+double UltimateTexasHoldem::Row::ev4x() {
+	Outcomes showdowns;
+	showdowns = stats.getFlattened();
+	return showdowns.getEV(getPlay(BET_PREFLOP));
 }
 
 UltimateTexasHoldem::UltimateTexasHoldem() {
@@ -175,27 +239,17 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 	init_deck(deck);
 	remove_cards(deck, playerHole);
 	remove_cards(deck, board);
-	double ev4x, ev2x, ev1x, ev0x;
+	double ev2x, ev1x, ev0x;
 	Outcomes showdowns;
 	Stats stats0x;	// check this street
 	if (board.size() == 0) {
-		stats0x.clear();
+		stats.clear();
 		// for each flop
-		forEachCombination<Card>(deck, 3, [this, &playerHole, &stats0x](const std::vector<Card> &flop) {
-			getStats(playerHole, flop, stats0x);	// add stats for each flop
+		forEachCombination<Card>(deck, 3, [this, &playerHole, &stats](const std::vector<Card> &flop) {
+			getStats(playerHole, flop, stats);	// add stats for each flop
 		});
-		ev0x = stats0x.getEV();
-		showdowns = stats0x.getFlattened();
-		ev4x = showdowns.getEV(getPlay(3));
-		if (ev0x > ev4x) {
-			stats = stats0x;
-		} else {
-			stats.clear();
-			stats.addOutcomes(3, showdowns);
-		}
 	} else if (board.size() == 3) {
 		stats0x.clear();
-		
 		// for each turn+river
 		forEachCombination<Card>(deck, 2, [this, &playerHole, &board, &stats0x](const std::vector<Card> &turnRiver) {
 			std::vector<Card> board5(board);

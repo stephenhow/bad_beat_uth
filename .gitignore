@@ -5,6 +5,8 @@ compile_commands.json
 .cache/
 *.sqlite3
 *.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
 *.dSYM
 *.log
 *.icloud

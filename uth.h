@@ -2,6 +2,7 @@
 #define UTH_H
 
 #include "poker.h"
+#include "database.h"
 #include <utility>
 
 #define ENABLE_BAD_BEAT true
@@ -11,21 +12,22 @@ class UltimateTexasHoldem {
 protected:
 	std::vector<std::pair<int, int>> dealerHoles;	// C(45,2) index pairs into the 45 remaining cards
 public:
+	enum Plays {FOLD=0, BET_RIVER=1, BET_FLOP=2, BET_PREFLOP=3};
 	struct Outcomes {
 		uint64_t wins[poker::Hand::ROYAL_FLUSH+1][2], losses[poker::Hand::ROYAL_FLUSH+1][2], ties;
 		uint64_t getTotal() const;
-		double getEV(int play, bool verbose=false);
+		double getEV(int play) const;
 		void add(const Outcomes &src, int mult=1);
 		static int elements();
 		void clear();
 	};
 	struct Stats {
-		Outcomes outcomes[4];	// [0x, 1x, 2x, 4x]
+		Outcomes outcomes[3];	// [0x, 1x, 2x]
 		//void addFrom(Stats &other);
 		uint64_t getTotal() const;
-		double getEV(bool verbose=false);
+		double getEV() const;
 		void addOutcomes(int n, const Outcomes &src);
-		Outcomes getFlattened();
+		Outcomes getFlattened() const;
 		void add(const Stats &src, int mult=1);
 		void clear();
 	};
@@ -34,6 +36,8 @@ public:
 		int multiplier;
 		std::string holecards;
 		Stats stats;
+		double ev4x();
+		bool is4x();
 	};
 	UltimateTexasHoldem();
 	static int getPlay(int);
@@ -44,6 +48,8 @@ public:
 	static double evFold() { return -2; };
 	void getStats(const std::vector<poker::Card> &playerHole, const std::vector<poker::Card> &board, Stats &stats);
 	bool qualifies(poker::Hand &dealer);
+	static std::string getCSV(int play, Outcomes &outcomes, uint64_t total);
+	static std::string getCSV(std::vector<Row> &rows);
 };
 
 #endif

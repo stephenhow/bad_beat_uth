@@ -79,8 +79,8 @@ void buildStartingHands(const std::vector<poker::Card> &deck, std::string filena
 	createDB(filename, rows);
 }
 
-// compute every row's stats and write each one back as soon as it's done. Rows that already have
-// stats (nonzero total) are skipped, so a run that gets interrupted can just be restarted.
+// compute every row's stats and write each one back as soon as it's done, overwriting whatever
+// stats the row already had.
 void fillRows(const std::string &filename) {
 	UltimateTexasHoldem game;
 
@@ -89,11 +89,7 @@ void fillRows(const std::string &filename) {
 	db.execute("PRAGMA synchronous=NORMAL;");   // safe under WAL, avoids an fsync on every commit
 	auto rows = readAllRows(db);
 
-	std::vector<size_t> todo;
-	for (size_t i = 0; i < rows.size(); i++) {
-		if (rows[i].stats.getTotal() == 0) todo.push_back(i);
-	}
-	cout << "totalRows: " << rows.size() << ", remaining: " << todo.size() << endl;
+	cout << "totalRows: " << rows.size() << " (computing all rows, overwriting any existing stats)" << endl;
 
 	Hand warmup;   // force Hand's lazily-initialized static tables to build once, single-threaded, before spawning workers
 
@@ -103,15 +99,15 @@ void fillRows(const std::string &filename) {
 	std::mutex coutMutex;
 	unsigned int numThreads = std::thread::hardware_concurrency();
 	if (numThreads == 0) numThreads = 1;
-	numThreads = std::min<size_t>(numThreads, todo.size());
+	numThreads = std::min<size_t>(numThreads, rows.size());
 	std::vector<std::thread> threads;
 	for (unsigned int t = 0; t < numThreads; t++) {
 		threads.emplace_back([&] {
 			Database threadDb(filename);
 			auto update = threadDb.prepare("UPDATE hands SET stats = ? WHERE id = ?;");
 			const std::vector<Card> emptyBoard;
-			for (size_t k = next++; k < todo.size(); k = next++) {
-				auto &row = rows[todo[k]];
+			for (size_t k = next++; k < rows.size(); k = next++) {
+				auto &row = rows[k];
 				// the slow part, with no DB transaction (and no write lock) held
 				game.getStats(getCards(row.holecards), emptyBoard, row.stats);
 				double ev = row.stats.getEV();
@@ -120,7 +116,7 @@ void fillRows(const std::string &filename) {
 				      .bind(2, row.id);
 				update.execute();
 				std::lock_guard<std::mutex> lock(coutMutex);
-				cout << std::format("[{}/{}] id: {:3}, {}, EV: {}", k + 1, todo.size(), row.id, row.holecards, ev) << endl;
+				cout << std::format("[{}/{}] id: {:3}, {}, EV: {}", k + 1, rows.size(), row.id, row.holecards, ev) << endl;
 			}
 		});
 	}
@@ -131,22 +127,13 @@ void evalGame(const std::string &filename) {
 	UltimateTexasHoldem game;
 	Database db(filename);
 	auto rows = readAllRows(db);
-	UltimateTexasHoldem::Stats stats;
-	stats.clear();
-	for (const auto &row : rows) {
-		stats.add(row.stats, row.multiplier);
-		if (row.stats.outcomes[3].getTotal()) {
-			cout << PREFLOP_PLAY_X << "x " << row.holecards << endl;
-		}
-	}
-	double ev;
-	ev = stats.getEV(true);
-	std::cout << "EV: " << ev << std::endl;
-	std::cout << "total: " << stats.getTotal() << std::endl;
+	std::string csv;
+	csv = UltimateTexasHoldem::getCSV(rows);
+	std::cout << csv << std::endl;
 }
 
 int main() {
-	//buildStartingHands(poker::FULL_DECK, "bb_uth3x.sqlite3");
+	buildStartingHands(poker::FULL_DECK, "uth.sqlite3");
 	//fillRows("bb_uth3x.sqlite3");
-	evalGame("bb_uth4x.sqlite3");
+	//evalGame("bb_uth4x.sqlite3");
 }
