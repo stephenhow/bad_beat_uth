@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Play Bad Beat Ultimate Texas Hold'em at $500 a hand and get every decision graded against the exact optimal strategy.">
+<meta name="description" content="Play Bad Beat Ultimate Texas Hold'em at $100 or $500 a hand and get every decision graded against the exact optimal strategy.">
 <title>Bad Beat UTH Trainer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -146,6 +146,12 @@ h1 em { font-style: normal; color: var(--brass); }
 	display: grid; place-items: center; font-family: var(--mono); font-weight: 600; font-size: 12px; color: #f3ecdf;
 	animation: chipIn 0.25s ease-out both;
 }
+.chip.c100 {
+	background:
+		radial-gradient(circle, #26262b 0 34%, #f3ecdf 35% 38%, transparent 39%),
+		repeating-conic-gradient(#141417 0 30deg, #f3ecdf 30deg 45deg);
+	box-shadow: 0 0 0 2px #000, 0 3px 5px rgba(0, 0, 0, 0.5);
+}
 @keyframes chipIn { from { transform: translateY(-18px); opacity: 0; } to { opacity: 1; } }
 .amount {
 	position: absolute; left: 50%; top: -12px; transform: translateX(-50%); z-index: 2;
@@ -209,6 +215,17 @@ aside { display: grid; gap: 14px; }
 .stats div { display: grid; gap: 1px; }
 .stats dt { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); }
 .stats dd { margin: 0; font-family: var(--mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bet-size { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.bet-size legend { float: left; padding: 0; margin-right: 4px; font-size: 15px; }
+.bet-size label { position: relative; cursor: pointer; }
+.bet-size input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.bet-size span {
+	display: inline-block; font-family: var(--mono); font-size: 14px; font-weight: 600; padding: 4px 12px;
+	border-radius: 999px; border: 1px solid var(--ink-faint); color: var(--ink-dim);
+}
+.bet-size input:checked + span { background: var(--brass); border-color: var(--brass); color: #22180a; }
+.bet-size input:focus-visible + span { outline: 3px solid #f5e3a8; outline-offset: 2px; }
+.bet-size .when { font-size: 13px; color: var(--ink-dim); }
 .row-btns { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; }
 .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer; }
 .toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -297,6 +314,12 @@ table.pay tr.hit td { color: var(--brass); }
 					<div><dt>Net result</dt><dd id="sNet">$0</dd></div>
 					<div><dt>EV given up</dt><dd id="sCost">$0</dd></div>
 				</dl>
+				<fieldset class="bet-size">
+					<legend>Ante bet</legend>
+					<label><input type="radio" name="unit" id="unit100" value="100"><span>$100</span></label>
+					<label><input type="radio" name="unit" id="unit500" value="500"><span>$500</span></label>
+					<span class="when" id="unitWhen"></span>
+				</fieldset>
 				<div class="row-btns">
 					<label class="toggle"><input type="checkbox" id="hints"><span class="switch"></span>Show EVs under the buttons</label>
 					<button class="link-btn" id="reset" type="button">Reset session</button>
@@ -309,15 +332,15 @@ table.pay tr.hit td { color: var(--brass); }
 					<thead><tr><th>Cotes</th><th>Gain</th><th>Bad beat</th></tr></thead>
 					<tbody></tbody>
 				</table>
-				<p class="note">Gain pays the Blind when you beat the dealer. Bad Beat pays the Blind instead of losing it when the player's hand loses. Blind pushes on other wins. Ante pushes if the dealer doesn't qualify. On a $500 Blind, 500 to 1 pays $250,000.</p>
+				<p class="note">Gain pays the Blind when you beat the dealer. Bad Beat pays the Blind instead of losing it when the player's hand loses. Blind pushes on other wins. Ante pushes if the dealer doesn't qualify. <span id="payExample"></span></p>
 			</section>
 
 			<section class="panel">
 				<h2>How a hand works</h2>
 				<ol class="rules">
-					<li>$500 on the Ante and $500 on the Blind. Raise 4× ($2,000) before the flop, or check.</li>
-					<li>If you checked, bet 2× ($1,000) on the flop, or check again.</li>
-					<li>If you still haven't bet, bet 1× ($500) or fold on the river.</li>
+					<li id="rule1"></li>
+					<li id="rule2"></li>
+					<li id="rule3"></li>
 					<li>You can bet only once. Folding loses the Ante and Blind.</li>
 				</ol>
 			</section>
@@ -342,8 +365,19 @@ table.pay tr.hit td { color: var(--brass); }
 		river: { name: 'River', bet: 'Bet 1×', pass: 'Fold', play: 1 },
 	};
 
-	let session = { hands: 0, decisions: 0, right: 0, net: 0, cost: 0 };
-	try { const s = JSON.parse(localStorage.getItem('bbuth-session')); if (s && typeof s.hands === 'number') session = s; } catch (e) {}
+	// session totals are kept in dollars, so changing the bet size never rescales past hands
+	const freshSession = () => ({ hands: 0, decisions: 0, right: 0, netDollars: 0, costDollars: 0 });
+	let session = freshSession();
+	try {
+		const s = JSON.parse(localStorage.getItem('bbuth-session'));
+		if (s && typeof s.hands === 'number') {
+			session = s;
+			if (typeof s.netDollars !== 'number') { session.netDollars = (s.net || 0) * 500; session.costDollars = (s.cost || 0) * 500; delete session.net; delete session.cost; }	// older sessions were all $500 hands
+		}
+	} catch (e) {}
+	let unit = 100;	// dollars per betting unit (the Ante); $100 unless the viewer picked $500
+	try { const u = Number(localStorage.getItem('bbuth-unit')); if (u === 100 || u === 500) unit = u; } catch (e) {}
+	$('unit' + unit).checked = true;
 	let hints = true;	// EVs under the buttons, on unless the viewer switched them off
 	try { hints = localStorage.getItem('bbuth-hints') !== '0'; } catch (e) {}
 	$('hints').checked = hints;
@@ -359,24 +393,25 @@ table.pay tr.hit td { color: var(--brass); }
 		return d;
 	}
 
-	// signed EV, green when positive and red when negative
-	function evSpan(x) {
-		const v = Math.round(x * UNIT);
-		return '<span class="' + (v > 0 ? 'pos' : v < 0 ? 'neg' : '') + '">' + fmt(x) + '</span>';
-	}
-	function fmt(x, plus = true) {
-		if (x === null || x === undefined) return '—';
-		const v = Math.round(x * UNIT);
-		const s = '$' + Math.abs(v).toLocaleString('en-US');
-		return v > 0 && plus ? '+' + s : v < 0 ? '−' + s : s;
-	}
-	const UNIT = 500;	// one betting unit = one $500 chip
-	function money(units, sign = true) {
-		const v = Math.round(units * UNIT);
+	const curUnit = () => (g ? g.unit : unit);
+	function dollars(v, sign = true) {
+		v = Math.round(v);
 		const s = '$' + Math.abs(v).toLocaleString('en-US');
 		if (!sign) return s;
 		return v > 0 ? '+' + s : v < 0 ? '−' + s : '$0';
 	}
+	// signed EV, green when positive and red when negative
+	function evSpan(x) {
+		const v = Math.round(x * curUnit());
+		return '<span class="' + (v > 0 ? 'pos' : v < 0 ? 'neg' : '') + '">' + fmt(x) + '</span>';
+	}
+	function fmt(x, plus = true) {
+		if (x === null || x === undefined) return '—';
+		const v = Math.round(x * curUnit());
+		const s = '$' + Math.abs(v).toLocaleString('en-US');
+		return v > 0 && plus ? '+' + s : v < 0 ? '−' + s : s;
+	}
+	function money(units, sign = true) { return dollars(units * curUnit(), sign); }
 
 	// ---------- rendering ----------
 	function cardEl(c, opts = {}) {
@@ -413,7 +448,7 @@ table.pay tr.hit td { color: var(--brass); }
 		container.dataset.sig = sig;
 	}
 
-	// units = number of $500 chips on the spot; result in units
+	// units = number of chips on the spot (one chip = one Ante); result in units
 	function setSpot(id, units, result) {
 		const spot = $(id);
 		const prev = spot.dataset.units | 0;
@@ -425,11 +460,11 @@ table.pay tr.hit td { color: var(--brass); }
 			stack.className = 'stack';
 			for (let i = 0; i < units; i++) {
 				const chip = document.createElement('div');
-				chip.className = 'chip';
+				chip.className = 'chip' + (g.unit === 100 ? ' c100' : '');
 				chip.style.top = (-i * 5) + 'px';
 				chip.style.zIndex = i + 1;
 				if (i < prev) chip.style.animation = 'none'; else chip.style.animationDelay = ((i - prev) * 0.08) + 's';
-				if (i === units - 1) chip.textContent = '500';
+				if (i === units - 1) chip.textContent = String(g.unit);
 				stack.appendChild(chip);
 			}
 			spot.appendChild(stack);
@@ -486,6 +521,7 @@ table.pay tr.hit td { color: var(--brass); }
 		renderActions();
 		renderCoach();
 		renderSession();
+		renderBetCopy();
 	}
 
 	function renderActions() {
@@ -567,11 +603,11 @@ table.pay tr.hit td { color: var(--brass); }
 			}
 			b.innerHTML = bars(last.decision, last.choice, { bet: st.bet, pass: st.pass });
 			if (last.street === 'preflop' && last.decision.ev.check === null) {
-				note.textContent = 'Expected result of the hand with a $500 Ante. Raising is best with this hand, so only the raise EV is stored. Checking is worth less by an amount it doesn\'t record.';
+				note.textContent = 'Expected result of the hand with a ' + dollars(curUnit(), false) + ' Ante. Raising is best with this hand, so only the raise EV is stored. Checking is worth less by an amount it doesn\'t record.';
 			} else if (!last.right) {
 				note.textContent = 'This decision cost ' + fmt(last.cost, false) + ' in expected value.';
 			} else {
-				note.textContent = 'Expected result of the hand with a $500 Ante, averaged over every way the remaining cards can fall.';
+				note.textContent = 'Expected result of the hand with a ' + dollars(curUnit(), false) + ' Ante, averaged over every way the remaining cards can fall.';
 			}
 		}
 		$('log').innerHTML = g.log.map(e => {
@@ -581,18 +617,27 @@ table.pay tr.hit td { color: var(--brass); }
 		}).join('');
 	}
 
+	function renderBetCopy() {
+		const u = curUnit();
+		$('rule1').textContent = dollars(u, false) + ' on the Ante and ' + dollars(u, false) + ' on the Blind. Raise 4× (' + dollars(4 * u, false) + ') before the flop, or check.';
+		$('rule2').textContent = 'If you checked, bet 2× (' + dollars(2 * u, false) + ') on the flop, or check again.';
+		$('rule3').textContent = 'If you still haven\'t bet, bet 1× (' + dollars(u, false) + ') or fold on the river.';
+		$('payExample').textContent = 'On a ' + dollars(u, false) + ' Blind, 500 to 1 pays ' + dollars(500 * u, false) + '.';
+		$('unitWhen').textContent = g && g.unit !== unit ? dollars(unit, false) + ' starts with the next hand.' : '';
+	}
+
 	function renderSession() {
 		$('sHands').textContent = session.hands;
 		$('sRight').textContent = session.decisions ? session.right + ' / ' + session.decisions : '–';
-		$('sNet').textContent = money(session.net);
-		$('sCost').textContent = money(session.cost, false);
+		$('sNet').textContent = dollars(session.netDollars);
+		$('sCost').textContent = dollars(session.costDollars, false);
 	}
 
 	// ---------- game flow ----------
 	function newHand() {
 		const d = shuffledDeck();
 		// casino deal order: player, dealer, player, dealer; the board comes from the rest of the shuffled deck
-		g = { hole: [d[0], d[2]], dealer: [d[1], d[3]], board: d.slice(4, 9), shown: 0, boardFrom: 0, phase: 'preflop', play: 0, decision: null, log: [], result: null };
+		g = { unit, hole: [d[0], d[2]], dealer: [d[1], d[3]], board: d.slice(4, 9), shown: 0, boardFrom: 0, phase: 'preflop', play: 0, decision: null, log: [], result: null };
 		g.decision = U.preflopDecision(g.hole);
 		render();
 	}
@@ -606,7 +651,7 @@ table.pay tr.hit td { color: var(--brass); }
 		const right = choice === bestChoice || (evOf(choice) !== null && Math.abs(evOf(choice) - evOf(bestChoice)) < 1e-9);
 		const cost = right ? 0 : (evOf(choice) === null ? null : evOf(bestChoice) - evOf(choice));
 		g.log.push({ street, choice: choice === 'bet' ? 'bet' : 'pass', best: d.best === 'bet' ? 'bet' : 'pass', right, cost, decision: d });
-		session.decisions++; if (right) session.right++; if (cost) session.cost += cost;
+		session.decisions++; if (right) session.right++; if (cost) session.costDollars += cost * g.unit;
 
 		if (choice === 'bet') { g.play = STREETS[street].play; return showdown(); }
 		if (street === 'preflop') {
@@ -624,12 +669,18 @@ table.pay tr.hit td { color: var(--brass); }
 	function showdown() {
 		g.boardFrom = g.shown; g.shown = 5; g.phase = 'done';
 		g.result = U.settle(g.hole, g.board, g.dealer, g.play);
-		session.hands++; session.net += g.result.net;
+		session.hands++; session.netDollars += g.result.net * g.unit;
 		saveSession();
 		render();
 	}
 
 	// ---------- controls ----------
+	document.querySelectorAll('input[name="unit"]').forEach(r => r.addEventListener('change', e => {
+		unit = Number(e.target.value);
+		try { localStorage.setItem('bbuth-unit', String(unit)); } catch (err) {}
+		if (g && g.phase === 'preflop' && g.log.length === 0) g.unit = unit;
+		render();
+	}));
 	$('hints').addEventListener('change', e => {
 		hints = e.target.checked;
 		try { localStorage.setItem('bbuth-hints', hints ? '1' : '0'); } catch (err) {}
@@ -639,7 +690,7 @@ table.pay tr.hit td { color: var(--brass); }
 	$('reset').addEventListener('click', e => {
 		if (!resetArmed) { resetArmed = true; e.target.textContent = 'Click again to reset'; setTimeout(() => { resetArmed = false; e.target.textContent = 'Reset session'; }, 3000); return; }
 		resetArmed = false; e.target.textContent = 'Reset session';
-		session = { hands: 0, decisions: 0, right: 0, net: 0, cost: 0 }; saveSession(); renderSession();
+		session = freshSession(); saveSession(); renderSession();
 	});
 	document.addEventListener('keydown', e => {
 		if (e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === 'INPUT') return;
