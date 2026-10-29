@@ -133,7 +133,7 @@ void evalGame(const std::string &filename) {
 }
 
 int main() {
-	buildStartingHands(poker::FULL_DECK, "uth.sqlite3");
+	//buildStartingHands(poker::FULL_DECK, "uth.sqlite3");
 	//fillRows("bb_uth3x.sqlite3");
-	//evalGame("bb_uth4x.sqlite3");
+	evalGame("bb_uth.sqlite3");
 }

@@ -1,0 +1,88 @@
+Outcome, Combinations, Frequency, Net, Return
+4x qualified win with Royal Flush, 596356920, 2.1441e-05, 505, 0.0108277
+4x non-qualified win with Royal Flush, 90386280, 3.24969e-06, 504, 0.00163784
+4x qualified win with Straight Flush, 1818135760, 6.53681e-05, 55, 0.00359525
+4x qualified loss with Straight Flush, 16781480, 6.03351e-07, 495, 0.000298659
+4x non-qualified win with Straight Flush, 229686840, 8.25801e-06, 54, 0.000445933
+4x qualified win with Four-of-a-Kind, 23008208760, 0.000827222, 15, 0.0124083
+4x qualified loss with Four-of-a-Kind, 417959520, 1.50271e-05, 20, 0.000300541
+4x qualified win with Full House, 295405180920, 0.0106208, 8, 0.0849665
+4x qualified loss with Full House, 15209462760, 0.000546831, 1, 0.000546831
+4x qualified win with Flush, 241047929080, 0.00866648, 6.5, 0.0563321
+4x qualified loss with Flush, 25201303760, 0.000906072, 0, 0
+4x non-qualified win with Flush, 50874988680, 0.00182913, 5.5, 0.0100602
+4x qualified win with Straight, 246174692160, 0.00885081, 6, 0.0531048
+4x qualified loss with Straight, 27433869720, 0.00098634, -1, -0.00098634
+4x non-qualified win with Straight, 81416649960, 0.0029272, 5, 0.014636
+4x qualified win with Three-of-a-Kind, 398148096080, 0.0143148, 5, 0.0715738
+4x qualified loss with Three-of-a-Kind, 96908813280, 0.0034842, -6, -0.0209052
+4x non-qualified win with Three-of-a-Kind, 67239396000, 0.00241748, 4, 0.00966993
+4x qualified win with Two Pairs, 1732499238840, 0.0622892, 5, 0.311446
+4x qualified loss with Two Pairs, 647085808680, 0.0232649, -6, -0.139589
+4x non-qualified win with Two Pairs, 151807752000, 0.005458, 4, 0.021832
+4x qualified win with One Pair, 1540402830960, 0.0553827, 5, 0.276913
+4x qualified loss with One Pair, 2001882459120, 0.0719744, -6, -0.431846
+4x non-qualified win with One Pair, 904600506240, 0.0325234, 4, 0.130094
+4x qualified loss with High Card, 1117397901600, 0.0401742, -6, -0.241045
+4x non-qualified win with High Card, 433149381600, 0.0155732, 4, 0.0622927
+4x non-qualified loss with High Card, 102655952400, 0.00369083, -5, -0.0184541
+4x Ties, 285142270600, 0.0102518, 0, 0
+2x qualified win with Royal Flush, 112333500, 4.03877e-06, 503, 0.0020315
+2x non-qualified win with Royal Flush, 8830620, 3.1749e-07, 502, 0.00015938
+2x qualified win with Straight Flush, 2704129504, 9.72225e-05, 53, 0.0051528
+2x qualified loss with Straight Flush, 15277856, 5.4929e-07, 497, 0.000272997
+2x non-qualified win with Straight Flush, 358131456, 1.2876e-05, 52, 0.000669554
+2x qualified win with Four-of-a-Kind, 18537793620, 0.000666496, 13, 0.00866445
+2x qualified loss with Four-of-a-Kind, 266529900, 9.58265e-06, 22, 0.000210818
+2x qualified win with Full House, 289401836880, 0.010405, 6, 0.0624298
+2x qualified loss with Full House, 17352129816, 0.000623867, 3, 0.0018716
+2x qualified win with Flush, 152618008784, 0.00548713, 4.5, 0.0246921
+2x qualified loss with Flush, 24745132904, 0.000889671, 2, 0.00177934
+2x non-qualified win with Flush, 38820798396, 0.00139574, 3.5, 0.00488508
+2x qualified win with Straight, 133100158992, 0.0047854, 4, 0.0191416
+2x qualified loss with Straight, 18762472068, 0.000674574, 1, 0.000674574
+2x non-qualified win with Straight, 45053788356, 0.00161984, 3, 0.00485951
+2x qualified win with Three-of-a-Kind, 413709285564, 0.0148742, 3, 0.0446227
+2x qualified loss with Three-of-a-Kind, 40068444600, 0.0014406, -4, -0.00576238
+2x non-qualified win with Three-of-a-Kind, 3535705512, 0.000127121, 2, 0.000254241
+2x qualified win with Two Pairs, 1303923602376, 0.0468804, 3, 0.140641
+2x qualified loss with Two Pairs, 628679435124, 0.0226031, -4, -0.0904126
+2x non-qualified win with Two Pairs, 253178274756, 0.00910261, 2, 0.0182052
+2x qualified win with One Pair, 397206766824, 0.0142809, 3, 0.0428428
+2x qualified loss with One Pair, 1075876859532, 0.0386814, -4, -0.154726
+2x non-qualified win with One Pair, 816509223576, 0.0293563, 2, 0.0587125
+2x qualified loss with High Card, 35388939288, 0.00127235, -4, -0.00508941
+2x non-qualified win with High Card, 10540265748, 0.000378958, 2, 0.000757916
+2x non-qualified loss with High Card, 7978353108, 0.000286849, -3, -0.000860546
+2x Ties, 191611691060, 0.00688908, 0, 0
+1x qualified win with Royal Flush, 42135660, 1.51492e-06, 502, 0.000760489
+1x non-qualified win with Royal Flush, 6109020, 2.1964e-07, 501, 0.00011004
+1x qualified win with Straight Flush, 1962591576, 7.05618e-05, 52, 0.00366921
+1x qualified loss with Straight Flush, 19443624, 6.99064e-07, 498, 0.000348134
+1x non-qualified win with Straight Flush, 269696304, 9.69649e-06, 51, 0.000494521
+1x qualified win with Four-of-a-Kind, 862645620, 3.1015e-05, 12, 0.00037218
+1x qualified loss with Four-of-a-Kind, 1670713140, 6.00678e-05, 23, 0.00138156
+1x qualified win with Full House, 43297986840, 0.00155671, 5, 0.00778354
+1x qualified loss with Full House, 9614534304, 0.000345675, 4, 0.0013827
+1x qualified win with Flush, 190959227136, 0.00686563, 3.5, 0.0240297
+1x qualified loss with Flush, 47224606296, 0.00169788, 3, 0.00509365
+1x non-qualified win with Flush, 40911000804, 0.00147089, 2.5, 0.00367722
+1x qualified win with Straight, 395087247768, 0.0142047, 3, 0.0426141
+1x qualified loss with Straight, 45159043092, 0.00162362, 2, 0.00324724
+1x non-qualified win with Straight, 136018223484, 0.00489031, 2, 0.00978063
+1x qualified win with Three-of-a-Kind, 84337562312, 0.00303222, 2, 0.00606444
+1x qualified loss with Three-of-a-Kind, 81794709408, 0.00294079, -3, -0.00882238
+1x non-qualified win with Three-of-a-Kind, 2262474288, 8.13436e-05, 1, 8.13436e-05
+1x qualified win with Two Pairs, 716402126436, 0.0257571, 2, 0.0515141
+1x qualified loss with Two Pairs, 557975550132, 0.0200611, -3, -0.0601833
+1x non-qualified win with Two Pairs, 31539562044, 0.00113395, 1, 0.00113395
+1x qualified win with One Pair, 574249407864, 0.0206462, 2, 0.0412924
+1x qualified loss with One Pair, 1629224192292, 0.0585761, -3, -0.175728
+1x non-qualified win with One Pair, 562176468156, 0.0202121, 1, 0.0202121
+1x qualified loss with High Card, 326962216284, 0.0117554, -3, -0.0352662
+1x non-qualified win with High Card, 124389179436, 0.00447221, 1, 0.00447221
+1x non-qualified loss with High Card, 47189745096, 0.00169663, -2, -0.00339326
+1x Ties, 418393625824, 0.0150427, 0, 0
+Fold, 5335881800040, 0.191843, -2, -0.383686
+Total, 27813810024000, 1, ,0.029273
+

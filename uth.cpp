@@ -153,7 +153,7 @@ std::string UltimateTexasHoldem::getCSV(std::vector<Row> &rows) {
 		startingHands += row.multiplier;
 		ev4x = showdowns.getEV(getPlay(BET_PREFLOP));
 		ev0x = row.stats.getEV();
-		if (ev4x > ev0x) {
+		if ((ev4x - ev0x) > 0.00) {
 			outcomes4x.add(showdowns, row.multiplier);
 			ev += ev4x*row.multiplier;
 		} else {
