@@ -5,6 +5,8 @@
 #include <atomic>
 #include <mutex>
 #include <format>
+#include <random>
+#include <algorithm>
 #include "uth.h"
 #include "database.h"
 
@@ -21,6 +23,7 @@ void createDB(std::string filename, const std::vector<UltimateTexasHoldem::Row> 
 	    "  id INTEGER PRIMARY KEY,"
 	    "  multiplier INTEGER,"
 	    "  holecards TEXT,"
+	    "  others TEXT,"
 	    "  stats BLOB"
 	    ");");
 
@@ -31,7 +34,8 @@ void createDB(std::string filename, const std::vector<UltimateTexasHoldem::Row> 
 			insert.bind(1, row.id)
 			      .bind(2, row.multiplier)
 			      .bind(3, row.holecards)
-			      .bind(4, &row.stats, sizeof(UltimateTexasHoldem::Stats));
+			      .bind(4, row.others)
+			      .bind(5, &row.stats, sizeof(UltimateTexasHoldem::Stats));
 			insert.execute();
 		}
 	});
@@ -40,13 +44,14 @@ void createDB(std::string filename, const std::vector<UltimateTexasHoldem::Row> 
 std::vector<UltimateTexasHoldem::Row> readAllRows(Database& db) {
     std::vector<UltimateTexasHoldem::Row> rows;
 
-    auto stmt = db.prepare("SELECT id, multiplier, holecards, stats FROM hands;");
+    auto stmt = db.prepare("SELECT id, multiplier, holecards, others, stats FROM hands;");
     stmt.query([&](Database::Statement& r) {
         UltimateTexasHoldem::Row row;
         row.id    = r.getInt(0);
         row.multiplier  = r.getInt(1);
         row.holecards = r.getText(2);
-        r.getBlob(3, &row.stats, sizeof(UltimateTexasHoldem::Stats));
+        row.others = r.getText(3);
+        r.getBlob(4, &row.stats, sizeof(UltimateTexasHoldem::Stats));
         rows.push_back(std::move(row));
     });
     return rows;
@@ -61,6 +66,7 @@ void initRows(std::vector<UltimateTexasHoldem::Row> &rows, std::vector<poker::St
 		row.id = id++;
 		row.multiplier = hand.multiplier;
 		row.holecards = poker::cards_to_str(hand.cards);
+		row.others = "";
 		rows.push_back(row);
 	}
 }
@@ -109,7 +115,7 @@ void fillRows(const std::string &filename) {
 			for (size_t k = next++; k < rows.size(); k = next++) {
 				auto &row = rows[k];
 				// the slow part, with no DB transaction (and no write lock) held
-				game.getStats(getCards(row.holecards), emptyBoard, row.stats);
+				game.getStats(getCards(row.holecards), emptyBoard, getCards(row.others), row.stats);
 				double ev = row.stats.getEV();
 				// one row per commit: rows take far longer to compute than to write
 				update.bind(1, &row.stats, sizeof(UltimateTexasHoldem::Stats))
@@ -123,9 +129,63 @@ void fillRows(const std::string &filename) {
 	for (auto &th : threads) th.join();
 }
 
+// Monte Carlo over random deals: each hand deals the player 2 hole cards and the other players
+// 2*(players-1) known cards, plays the best preflop choice (4x vs check, then optimal flop/river
+// play via getStats), and adds that EV to the running total. Runs on every hardware thread until
+// maxHands hands are done (0 = run until stopped), printing the running mean and its standard error.
+void simHands(int players, uint64_t maxHands = 0) {
+	if (players < 1 || players > 6) {
+		cerr << "simHands: players must be 1..6 (draw tables cover up to 6 players' hole cards)" << endl;
+		return;
+	}
+	UltimateTexasHoldem game;	// read-only once built, so all threads share it
+	Hand warmup;	// build Hand's lazily-initialized static tables once, single-threaded, before spawning workers
+
+	std::mutex mtx;	// guards the totals and cout
+	uint64_t hands = 0;
+	double net = 0, netSq = 0;	// sum of per-hand EVs and of their squares, for the standard error
+	std::atomic<uint64_t> started{0};
+
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0) numThreads = 1;
+	if (maxHands) numThreads = std::min<uint64_t>(numThreads, maxHands);
+	cout << "simHands: " << players << " players, " << numThreads << " threads, "
+	     << (maxHands ? std::to_string(maxHands) + " hands" : std::string("until stopped")) << endl;
+
+	std::vector<std::thread> threads;
+	for (unsigned int t = 0; t < numThreads; t++) {
+		threads.emplace_back([&, t] {
+			// each thread shuffles with its own generator; poker::shuffle() shares one static generator, which isn't thread-safe
+			std::mt19937_64 rng(std::random_device{}() ^ (0x9E3779B97F4A7C15ull * (t + 1)));
+			std::vector<Card> deck;
+			init_deck(deck);
+			const std::vector<Card> emptyBoard;
+			UltimateTexasHoldem::Stats stats;
+			while (!maxHands || started++ < maxHands) {
+				std::shuffle(deck.begin(), deck.end(), rng);
+				std::vector<Card> hole(deck.begin(), deck.begin() + 2);
+				std::vector<Card> others(deck.begin() + 2, deck.begin() + 2 * players);
+				game.getStats(hole, emptyBoard, others, stats);
+				double ev = std::max(stats.getEV4x(), stats.getEV());
+
+				std::lock_guard<std::mutex> lock(mtx);
+				hands++;
+				net += ev;
+				netSq += ev * ev;
+				double mean = net / hands;
+				double se = hands > 1 ? std::sqrt((netSq / hands - mean * mean) / (hands - 1)) : 0;
+				cout << std::format("{:6} {} | others {:<17} | ev {:+.5f} | mean {:+.5f} ± {:.5f}",
+				                    hands, cards_to_str(hole), cards_to_str(others), ev, mean, se) << endl;
+			}
+		});
+	}
+	for (auto &th : threads) th.join();
+}
+
 void evalGame(const std::string &filename) {
 	UltimateTexasHoldem game;
 	Database db(filename);
+	std::vector<Card> emptyBoard;
 	auto rows = readAllRows(db);
 	std::string csv;
 	csv = UltimateTexasHoldem::getCSV(rows);
@@ -135,5 +195,6 @@ void evalGame(const std::string &filename) {
 int main() {
 	//buildStartingHands(poker::FULL_DECK, "uth.sqlite3");
 	//fillRows("bb_uth3x.sqlite3");
-	evalGame("bb_uth.sqlite3");
+	//evalGame("bb_uth.sqlite3");
+	simHands(6);
 }

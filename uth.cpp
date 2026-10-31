@@ -103,6 +103,12 @@ double UltimateTexasHoldem::Stats::getEV() const {
 	return ev;
 }
 
+double UltimateTexasHoldem::Stats::getEV4x() const {
+	Outcomes showdowns;
+	showdowns = this->getFlattened();
+	return showdowns.getEV(getPlay(BET_PREFLOP));
+}
+
 std::string UltimateTexasHoldem::getCSV(int play, Outcomes &outcomes, uint64_t total) {
 	std::stringstream csv;
 	uint64_t n;
@@ -151,7 +157,7 @@ std::string UltimateTexasHoldem::getCSV(std::vector<Row> &rows) {
 		showdowns = row.stats.getFlattened();
 		total += row.multiplier*showdowns.getTotal();
 		startingHands += row.multiplier;
-		ev4x = showdowns.getEV(getPlay(BET_PREFLOP));
+		ev4x = row.stats.getEV4x();
 		ev0x = row.stats.getEV();
 		if ((ev4x - ev0x) > 0.00) {
 			outcomes4x.add(showdowns, row.multiplier);
@@ -172,18 +178,19 @@ std::string UltimateTexasHoldem::getCSV(std::vector<Row> &rows) {
 	return csv.str();
 }
 
-double UltimateTexasHoldem::Row::ev4x() {
-	Outcomes showdowns;
-	showdowns = stats.getFlattened();
-	return showdowns.getEV(getPlay(BET_PREFLOP));
-}
-
 UltimateTexasHoldem::UltimateTexasHoldem() {
-	// all C(45,2) = 990 dealer hole card combos, as index pairs into the 45 remaining cards
-	dealerHoles.reserve(990);
-	for (int i = 0; i < 45; i++)
-		for (int j = i + 1; j < 45; j++)
-			dealerHoles.emplace_back(i, j);
+	int remaining;
+	for (int i=1; i<=6; i++) {
+		// preflop
+		remaining = 52 - 2*i;
+		draws3[remaining] = generate_combinations(remaining, 3);
+		// flop
+		remaining = 52 - 2*i - 3;
+		draws2[remaining] = generate_combinations(remaining, 2);
+		// river
+		remaining = 52 - 2*i - 5;
+		draws2[remaining] = generate_combinations(remaining, 2);
+	}
 }
 
 int UltimateTexasHoldem::getPlay(int p) {
@@ -234,31 +241,33 @@ bool UltimateTexasHoldem::qualifies(Hand &dealer) {
 	return (dealer.getRank() >= Hand::ONE_PAIR);
 }
 
-void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const std::vector<Card> &board, UltimateTexasHoldem::Stats &stats) {
+void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const std::vector<Card> &board, const std::vector<Card> &others, UltimateTexasHoldem::Stats &stats) {
 	std::vector<Card> deck;
 	init_deck(deck);
 	remove_cards(deck, playerHole);
 	remove_cards(deck, board);
+	remove_cards(deck, others);
+	int remaining = deck.size();
 	double ev2x, ev1x, ev0x;
 	Outcomes showdowns;
 	Stats stats0x;	// check this street
 	if (board.size() == 0) {
 		stats.clear();
 		// for each flop
-		forEachCombination<Card>(deck, 3, [this, &playerHole, &stats](const std::vector<Card> &flop) {
-			getStats(playerHole, flop, stats);	// add stats for each flop
+		forEachCombination<Card>(deck, 3, [this, &playerHole, &others, &stats](const std::vector<Card> &flop) {
+			getStats(playerHole, flop, others, stats);	// add stats for each flop
 		});
 	} else if (board.size() == 3) {
 		stats0x.clear();
 		// for each turn+river
-		forEachCombination<Card>(deck, 2, [this, &playerHole, &board, &stats0x](const std::vector<Card> &turnRiver) {
+		forEachCombination<Card>(deck, 2, [this, &playerHole, &board, &others, &stats0x](const std::vector<Card> &turnRiver) {
 			std::vector<Card> board5(board);
 			board5.insert(board5.begin(), turnRiver.begin(), turnRiver.end());
-			getStats(playerHole, board5, stats0x);	// add stats for each turn&river
+			getStats(playerHole, board5, others, stats0x);	// add stats for each turn&river
 		});
 		ev0x = stats0x.getEV();
 		showdowns = stats0x.getFlattened();
-		ev2x = showdowns.getEV(getPlay(2));
+		ev2x = showdowns.getEV(getPlay(BET_FLOP));
 		if (ev0x > ev2x) {
 			stats.addOutcomes(1, stats0x.outcomes[1]);
 			stats.addOutcomes(0, stats0x.outcomes[0]);
@@ -276,9 +285,9 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 		bool qual;
 		Hand::Rank r;
 		r = player.getRank();
-		for (auto &holecards : dealerHoles) {
-			d0 = deck[holecards.first];
-			d1 = deck[holecards.second];
+		for (auto &holecards : draws2.at(remaining)) {
+			d0 = deck[holecards.at(0)];
+			d1 = deck[holecards.at(1)];
 			dealer.add(d0);
 			dealer.add(d1);
 			dealer.eval();
@@ -293,7 +302,7 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 			dealer.remove(d0);
 			dealer.remove(d1);
 		}
-		ev1x = showdowns.getEV(getPlay(1));
+		ev1x = showdowns.getEV(getPlay(BET_RIVER));
 		if (ev1x > evFold()) {
 			stats.addOutcomes(1, showdowns);
 		} else {

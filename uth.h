@@ -10,7 +10,7 @@
 
 class UltimateTexasHoldem {
 protected:
-	std::vector<std::pair<int, int>> dealerHoles;	// C(45,2) index pairs into the 45 remaining cards
+	std::map<int, std::vector< std::vector<int>>> draws3, draws2;	// C(remaining.size(),3) and C(remaining.size(),2) to speed up calculations
 public:
 	enum Plays {FOLD=0, BET_RIVER=1, BET_FLOP=2, BET_PREFLOP=3};
 	struct Outcomes {
@@ -30,13 +30,14 @@ public:
 		Outcomes getFlattened() const;
 		void add(const Stats &src, int mult=1);
 		void clear();
+		double getEV4x() const;
 	};
 	struct Row {
 		int id;
 		int multiplier;
 		std::string holecards;
+		std::string others;
 		Stats stats;
-		double ev4x();
 		bool is4x();
 	};
 	UltimateTexasHoldem();
@@ -46,7 +47,7 @@ public:
 	static double getWin(int play, bool qual, poker::Hand::Rank r);
 	static double getLoss(int play, bool qual, poker::Hand::Rank r);
 	static double evFold() { return -2; };
-	void getStats(const std::vector<poker::Card> &playerHole, const std::vector<poker::Card> &board, Stats &stats);
+	void getStats(const std::vector<poker::Card> &playerHole, const std::vector<poker::Card> &board, const std::vector<poker::Card> &others, Stats &stats);
 	bool qualifies(poker::Hand &dealer);
 	static std::string getCSV(int play, Outcomes &outcomes, uint64_t total);
 	static std::string getCSV(std::vector<Row> &rows);

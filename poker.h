@@ -197,6 +197,7 @@ public:
 	void add(const std::vector<Card> &cards);
 	void remove(Card);
 	Card remove(Card::Rank r);
+	void remove(const std::vector<Card> &cards);
 	void eval();
 	void clear();
 	

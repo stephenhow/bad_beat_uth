@@ -124,6 +124,12 @@ Card Hand::remove(Card::Rank r) {
 	return c;
 }
 
+void Hand::remove(const std::vector<Card> &cards) {
+	for (const auto &card : cards) {
+		this->remove(card);
+	}
+}
+
 void Hand::eval() {
 	singletons = 0x0;
 	pairs = 0x0;
