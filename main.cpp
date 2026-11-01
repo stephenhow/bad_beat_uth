@@ -27,7 +27,7 @@ void createDB(std::string filename, const std::vector<UltimateTexasHoldem::Row> 
 	    "  stats BLOB"
 	    ");");
 
-	auto insert = db.prepare("INSERT INTO hands (id, multiplier, holecards, stats) VALUES (?, ?, ?, ?);");
+	auto insert = db.prepare("INSERT INTO hands (id, multiplier, holecards, others, stats) VALUES (?, ?, ?, ?, ?);");
 
 	db.withTransaction([&] {
 		for (auto &row : rows) {
@@ -176,6 +176,76 @@ void simHands(int players, uint64_t maxHands = 0) {
 				double se = hands > 1 ? std::sqrt((netSq / hands - mean * mean) / (hands - 1)) : 0;
 				cout << std::format("{:6} {} | others {:<17} | ev {:+.5f} | mean {:+.5f} ± {:.5f}",
 				                    hands, cards_to_str(hole), cards_to_str(others), ev, mean, se) << endl;
+			}
+		});
+	}
+	for (auto &th : threads) th.join();
+}
+
+// Compute a total of 'rows' simulated hands for a given playerHole cards, others = 2*(players-1) dealt remaining cards (playerHole removed from deck),
+// Hands are randomly dealt but filtered for only when 'others' contains a total of 'copies' of either of the player's hole cards
+// examples:
+//   if playerHole = "Kc 5s", and copies = 1, add row to database only when randomly dealt others contains a total of 1 King or Five.
+//   if playerHole = "Ts 9s", and copies = 0, add row to database only when randomly dealt others contains no other Ten or Nine.
+//   if playerHole = "Qs 8h", and copies = 2, add row to database only when randomly dealt others contains a total of 2 cards that are Queen or Eight
+// The function exits when a total of 'rows' matching the (playerHole, others) requirement have been written to the database.
+// The function should run getStats() on the seperate threads of the instance 
+void addToDatabase(Database &db, int rows, const std::string &playerHole, int players, int copies) {
+	const std::vector<Card> hole = getCards(playerHole);
+	const int nOthers = 2 * (players - 1);
+	// the most matching cards that can be among the others: 2 left of a paired rank, 3 + 3 otherwise
+	const int available = std::min(nOthers, hole[0].rank == hole[1].rank ? 2 : 6);
+	if (hole.size() != 2 || players < 1 || players > 6 || copies < 0 || copies > available) {
+		cerr << "addToDatabase: need 2 hole cards, players 1..6, and copies 0.." << available << endl;
+		return;
+	}
+	const auto matches = [&](const Card &c) { return c.rank == hole[0].rank || c.rank == hole[1].rank; };
+
+	std::vector<Card> deck;
+	init_deck(deck);
+	remove_cards(deck, hole);
+
+	UltimateTexasHoldem game;	// read-only once built, so all threads share it
+	Hand warmup;	// build Hand's lazily-initialized static tables once, single-threaded, before spawning workers
+	auto insert = db.prepare("INSERT INTO hands (multiplier, holecards, others, stats) VALUES (?, ?, ?, ?);");	// id assigned by SQLite
+	std::mutex mtx;	// guards the shared connection, the insert statement and cout
+	std::atomic<int> claimed{0};
+	int written = 0;
+
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0) numThreads = 1;
+	numThreads = std::min<unsigned int>(numThreads, rows);
+	cout << std::format("addToDatabase: {} rows, hole {}, {} players, {} cards of rank {}{} among the {} others, {} threads",
+	                    rows, cards_to_str(hole), players, copies, Card::rankNames[hole[0].rank], hole[0].rank == hole[1].rank ? "" : std::string("/") + Card::rankNames[hole[1].rank], nOthers, numThreads) << endl;
+
+	std::vector<std::thread> threads;
+	for (unsigned int t = 0; t < numThreads; t++) {
+		threads.emplace_back([&, t] {
+			std::mt19937_64 rng(std::random_device{}() ^ (0x9E3779B97F4A7C15ull * (t + 1)));
+			std::vector<Card> shuffled(deck);
+			const std::vector<Card> emptyBoard;
+			UltimateTexasHoldem::Stats stats;
+			while (true) {
+				// rejection sampling: redeal the others until they hold exactly 'copies' matching cards,
+				// which leaves every qualifying deal equally likely
+				std::vector<Card> others;
+				do {
+					std::shuffle(shuffled.begin(), shuffled.end(), rng);
+					others.assign(shuffled.begin(), shuffled.begin() + nOthers);
+				} while (std::count_if(others.begin(), others.end(), matches) != copies);
+				if (claimed++ >= rows) break;	// enough rows are done or in progress
+
+				game.getStats(hole, emptyBoard, others, stats);
+				double ev4x = stats.getEV4x(), ev0x = stats.getEV();
+
+				std::lock_guard<std::mutex> lock(mtx);
+				insert.bind(1, 1)	// every sampled deal counts once
+				      .bind(2, cards_to_str(hole))
+				      .bind(3, cards_to_str(others))
+				      .bind(4, &stats, sizeof(UltimateTexasHoldem::Stats));
+				insert.execute();
+				written++;
+				cout << std::format("[{}/{}] others {:<17} | 4x {:+.5f} | check {:+.5f} | {}", written, rows, cards_to_str(others), ev4x, ev0x, ev4x > ev0x ? "4x" : "check") << endl;
 			}
 		});
 	}
