@@ -51,6 +51,8 @@ public:
 	bool qualifies(poker::Hand &dealer);
 	static std::string getCSV(int play, Outcomes &outcomes, uint64_t total);
 	static std::string getCSV(std::vector<Row> &rows);
+	// some utility functions
+	bool isPlay4x(const std::vector<poker::Card> &playerHole, const std::vector<poker::Card> &others);
 };
 
 #endif

@@ -164,6 +164,7 @@ Here are the rules for 4x'ing playerHole cards, depending on the number of copie
 | JTo        | 1                 |                                                                                                                   |
 | T9s        | 1                 |                                                                                                                   |
 | T8s        | 0                 |                                                                                                                   |
+| T7s        | 0                 | tested at 0 copies after the series (basic: check)                                                                |
 | T9o        | 0                 |                                                                                                                   |
 | T8o        | 0                 |                                                                                                                   |
 | 98s        | 0                 |                                                                                                                   |
@@ -257,6 +258,7 @@ Added return: frequency * average gain, ± 95% CI, in ante units per hand dealt.
 | T9s        |      0 | +0.1962 ± 0.0249 | 0.0007287 | 0.0001429 ± 0.0000182 | check → 4x         |   64 |
 | T9s        |      1 | +0.0284 ± 0.0083 | 0.0012491 | 0.0000355 ± 0.0000104 | check → 4x         |  640 |
 | T8s        |      0 | +0.1434 ± 0.0230 | 0.0007287 | 0.0001045 ± 0.0000168 | check → 4x         |   64 |
+| T7s        |      0 | +0.0356 ± 0.0085 | 0.0007287 | 0.0000259 ± 0.0000062 | check → 4x         |  640 |
 | T9o        |      0 | +0.1004 ± 0.0199 | 0.0021860 | 0.0002194 ± 0.0000434 | check → 4x         |   64 |
 | T8o        |      0 | +0.0132 ± 0.0073 | 0.0021860 | 0.0000288 ± 0.0000159 | check → 4x         |  640 |
 | 98s        |      0 | +0.0277 ± 0.0093 | 0.0007287 | 0.0000202 ± 0.0000068 | check → 4x         |  640 |
@@ -265,17 +267,51 @@ Added return: frequency * average gain, ± 95% CI, in ante units per hand dealt.
 | 33         |      2 | +0.4604 ± 0.0297 | 0.0001662 | 0.0000765 ± 0.0000049 | 4x → check         |   64 |
 | 44         |      2 | +0.2066 ± 0.0356 | 0.0001662 | 0.0000343 ± 0.0000059 | 4x → check         |   64 |
 
-Total added return (sum over all 72 points): +0.007721 ± 0.000158 ante units per hand dealt (95% CI).
-With the standard game's -0.021850 per hand under basic strategy, the 6-player preflop decision alone lifts it to about -0.014129.
+Total added return (sum over all 73 points): +0.007747 ± 0.000159 ante units per hand dealt (95% CI).
+With the standard game's -0.021850 per hand under basic strategy, the 6-player preflop decision alone lifts it to about -0.014103.
 
 How often the 10 known cards change the preflop decision (sum of the frequencies):
-- in total: 0.07808 (7.808% of hands dealt)
+- in total: 0.07881 (7.881% of hands dealt)
 - basic 4x → check: 0.03461 (3.461%)
-- basic check → 4x: 0.04348 (4.348%)
+- basic check → 4x: 0.04421 (4.421%)
 - of which close-call points (K7o 2 copies, KTo 3 copies, Q5s 1 copy, effectively toss-ups): 0.00427 (0.427%)
 
 Notes:
 - copies <= 3 only; 4 or more copies (about 1.10% of deals for a non-paired hand) are not counted.
 - Points above a hand's cutoff that the threshold search skipped (e.g. K5o with 3 copies) were run for this table; all confirmed check.
 - Each point has at least 64 rows, plus batches until its 95% CI was within ±20% of its gain, up to 10 batches (640 rows); points at 640 rows have wider intervals but small gains, so they hardly affect the total.
-- Covers the hands in the series above, which the spec takes to include every hand whose decision can change.
+- T7s was tested at 0 copies after the series (it switches basic check → 4x); it is included above.
+- Covers the hands in the series above plus T7s, which the spec takes to include every hand whose decision can change.
+
+## Total Gain
+Total EV of the standard game with 6 players when the player knows the other 5 players' hole cards (10 cards), using every decision the known cards allow:
+isPlay4x(playerHole, others) preflop, and getStats(playerHole, flop, others) for the optimal flop 2x/check and river 1x/fold decisions.
+
+Method: simPostflop(6, 2000000), a Monte Carlo over 2,000,000 random deals (2 hole cards, 10 known cards, 3-card flop). Each deal is played twice:
+with the known cards as above, and with no known cards (basic strategy and getStats(playerHole, flop, {})). The per-deal difference is the gain
+from knowing the cards; both plays share the deal's luck, so the gain converges far faster (per-deal SD about 0.34) than the EV itself (SD about 1.7).
+Total EV = the exact no-information EV (-0.0218497, from uth.sqlite3) + mean gain.
+
+| measure (ante units per hand)                      | 2,000,000 hands      |
+|----------------------------------------------------|----------------------|
+| total EV with 10 known cards                       | -0.010748 ± 0.000529 |
+| gain over basic strategy                           | +0.011102 ± 0.000529 |
+| direct EV with known cards (check)                 | -0.00956 ± 0.00257   |
+| EV with no known cards (check; exact -0.0218497)   | -0.02066 ± 0.00252   |
+| hands raised 4x preflop                            | 38.33%               |
+| hands whose preflop decision differs from basic    | 8.09%                |
+
+All ± are 95% confidence intervals. The two checks agree with the total EV and with the exact no-information EV.
+
+Findings:
+- Knowing the other 5 players' hole cards cuts the house edge about in half, from 2.18% to 1.07% of the Ante, but the game stays negative for the player
+  (the whole 95% interval is below -0.0102).
+- The preflop decision changes on 8.09% of hands, a little more than the 7.81% in Preflop Gain because the simulation also includes 4 or more copies.
+- The simulation ran before T7s was found to switch to 4x with 0 copies, so it played T7s as check there. T7s adds only about +0.000026
+  per hand (Preflop Gain), far inside the ±0.000529 interval, so the total EV above stands.
+- The Preflop Gain table's +0.0077 (copies <= 3) is roughly 70% of the total gain; the rest comes from the flop/river decisions and the rarer 4+ copy hands.
+  The simulation doesn't split the gain into preflop and postflop parts: comparing the checked hands with and without the known cards is biased,
+  because which hands check depends on the known cards themselves.
+
+Run: AWS c8g.16xlarge, 64 threads, about 1,070 paired hands per second (31 minutes), ENABLE_BAD_BEAT false, PREFLOP_PLAY_X 4,
+code from commit 3e5055b plus the working-tree isPlay4x() charts and simPostflop().

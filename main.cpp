@@ -5,6 +5,7 @@
 #include <atomic>
 #include <mutex>
 #include <format>
+#include <chrono>
 #include <random>
 #include <algorithm>
 #include "uth.h"
@@ -260,6 +261,95 @@ void evalGame(const std::string &filename) {
 	std::string csv;
 	csv = UltimateTexasHoldem::getCSV(rows);
 	std::cout << csv << std::endl;
+}
+
+// uses maximum available threads to run parallel Monte Carlo analysis where:
+//   hands++
+//   shuffle deck, deal 2 cards to playerHole, 2*(players-1) cards to others
+//   playPreflop = isPlay4x(playerHole, others)
+//   deal 3 card flop
+//   call getStats(playerHole, flop, others, &stats)
+//   evHand = (playPreflop ? stats.getEV4x() : stats.getEV())
+//   net += evHand
+// Each deal is also played without the known cards (basic strategy, getStats with no others); the difference is the
+// gain from knowing them on that deal. The two share the deal's luck, so the gain converges far faster than evHand
+// (per-deal SD about 0.34 vs 1.7 with 6 players). Total EV = the exact no-information EV + mean gain.
+// The gain splits into postflopGain = EV(playerHole, flop, others) - EV(playerHole, flop, {}) on hands checked
+// preflop (!playPreflop), from the flop/river decisions, and preflopGain = the rest, from the preflop decision.
+// periodically print out stats
+void simPostflop(int players, uint64_t maxHands = 0) {
+	// exact standard-game EV per hand with basic strategy and no known cards (uth.sqlite3, evalGame total)
+	const double basicEV = ENABLE_BAD_BEAT ? 0.029273 : -0.0218497;
+	if (players < 1 || players > 6) {
+		cerr << "simPostflop: players must be 1..6" << endl;
+		return;
+	}
+	UltimateTexasHoldem game;	// read-only once built, so all threads share it
+	Hand warmup;	// build Hand's lazily-initialized static tables once, single-threaded, before spawning workers
+
+	std::mutex mtx;	// guards the totals and cout
+	uint64_t hands=0, played4x=0, changed=0;
+	double net=0, netSq=0, base=0, baseSq=0, gain=0, gainSq=0;	// sums and sums of squares, for standard errors
+	double post=0, postSq=0, pre=0, preSq=0;
+
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0) numThreads = 1;
+	cout << "simPostflop: " << players << " players, " << numThreads << " threads, ENABLE_BAD_BEAT " << (ENABLE_BAD_BEAT ? "true" : "false")
+	     << ", " << (maxHands ? std::to_string(maxHands) + " hands" : std::string("until stopped")) << endl;
+	const auto start = std::chrono::steady_clock::now();
+	auto ci = [](double sum, double sumSq, uint64_t n) {	// 95% half-width of the mean
+		double m = sum / n;
+		return 1.96 * std::sqrt(std::max(0.0, (sumSq / n - m * m) / (n - 1)));
+	};
+
+	std::atomic<uint64_t> started{0};
+	std::vector<std::thread> threads;
+	for (unsigned int t = 0; t < numThreads; t++) {
+		threads.emplace_back([&, t] {
+			// each thread shuffles with its own generator; poker::shuffle() shares one static generator, which isn't thread-safe
+			std::mt19937_64 rng(std::random_device{}() ^ (0x9E3779B97F4A7C15ull * (t + 1)));
+			std::vector<Card> deck;
+			init_deck(deck);
+			const std::vector<Card> none;
+			UltimateTexasHoldem::Stats stats, baseStats;
+			while (!maxHands || started++ < maxHands) {
+				std::shuffle(deck.begin(), deck.end(), rng);
+				std::vector<Card> hole(deck.begin(), deck.begin() + 2);
+				std::vector<Card> others(deck.begin() + 2, deck.begin() + 2 * players);
+				std::vector<Card> flop(deck.begin() + 2 * players, deck.begin() + 2 * players + 3);
+				bool playPreflop = game.isPlay4x(hole, others);
+				stats.clear();	// getStats() adds the flop's outcomes into stats
+				game.getStats(hole, flop, others, stats);
+				double ev = playPreflop ? stats.getEV4x() : stats.getEV();
+				// the same deal without the known cards
+				bool basicPlay = game.isPlay4x(hole, none);
+				baseStats.clear();
+				game.getStats(hole, flop, none, baseStats);
+				double evBase = basicPlay ? baseStats.getEV4x() : baseStats.getEV();
+
+				std::lock_guard<std::mutex> lock(mtx);
+				hands++;
+				if (playPreflop) played4x++;
+				if (playPreflop != basicPlay) changed++;
+				net += ev; netSq += ev * ev;
+				base += evBase; baseSq += evBase * evBase;
+				gain += ev - evBase; gainSq += (ev - evBase) * (ev - evBase);
+				// postflop part: only on hands checked preflop with the known cards (0 otherwise)
+				double g = ev - evBase, gPost = playPreflop ? 0 : stats.getEV() - baseStats.getEV();
+				post += gPost; postSq += gPost * gPost;
+				pre += g - gPost; preSq += (g - gPost) * (g - gPost);
+				if (hands % 10000 == 0) {
+					double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+					cout << std::format("hands {:>9} | total EV {:+.6f} ± {:.6f} | gain {:+.6f} ± {:.6f} | preflopGain {:+.6f} ± {:.6f} | postflopGain {:+.6f} ± {:.6f} | direct EV {:+.5f} ± {:.5f} | no-info EV {:+.5f} ± {:.5f} | 4x {:.2f}% | preflop changed {:.2f}% | {:.0f}/s",
+					                    hands, basicEV + gain / hands, ci(gain, gainSq, hands), gain / hands, ci(gain, gainSq, hands),
+					                    pre / hands, ci(pre, preSq, hands), post / hands, ci(post, postSq, hands),
+					                    net / hands, ci(net, netSq, hands), base / hands, ci(base, baseSq, hands),
+					                    100.0 * played4x / hands, 100.0 * changed / hands, hands / secs) << endl;
+				}
+			}
+		});
+	}
+	for (auto &th : threads) th.join();
 }
 
 int main() {

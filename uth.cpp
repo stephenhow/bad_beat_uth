@@ -1,5 +1,6 @@
 #include "uth.h"
 #include <iostream>
+#include <array>
 #include <sstream>
 
 using namespace poker;
@@ -309,4 +310,69 @@ void UltimateTexasHoldem::getStats(const std::vector<Card> &playerHole, const st
 			stats.addOutcomes(0, showdowns);
 		}
 	}
+}
+
+// Preflop 4x decisions for the standard game (ENABLE_BAD_BEAT false), as 13x13 hand charts indexed by rank
+// (DEUCE = 0): pairs on the diagonal [r][r], suited hands above it [high][low], offsuit hands below it [low][high].
+// Each entry is the maximum number of copies of the hand's ranks among the known cards for which to 4x;
+// -1 means check even with 0 copies, 6 means 4x with any number of copies.
+using Chart = std::array<std::array<int, Card::ACE + 1>, Card::ACE + 1>;
+
+static const Chart basicChart = {{	// no information: basic strategy (from uth.sqlite3), -1 check / 6 4x
+	//  2   3   4   5   6   7   8   9   T   J   Q   K   A
+	{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  6 },	// 2
+	{ -1,  6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  6 },	// 3
+	{ -1, -1,  6, -1, -1, -1, -1, -1, -1, -1, -1, -1,  6 },	// 4
+	{ -1, -1, -1,  6, -1, -1, -1, -1, -1, -1, -1,  6,  6 },	// 5
+	{ -1, -1, -1, -1,  6, -1, -1, -1, -1, -1, -1,  6,  6 },	// 6
+	{ -1, -1, -1, -1, -1,  6, -1, -1, -1, -1, -1,  6,  6 },	// 7
+	{ -1, -1, -1, -1, -1, -1,  6, -1, -1, -1,  6,  6,  6 },	// 8
+	{ -1, -1, -1, -1, -1, -1, -1,  6, -1, -1,  6,  6,  6 },	// 9
+	{ -1, -1, -1, -1, -1, -1, -1, -1,  6,  6,  6,  6,  6 },	// T
+	{ -1, -1, -1, -1, -1, -1,  6,  6,  6,  6,  6,  6,  6 },	// J
+	{ -1, -1, -1, -1,  6,  6,  6,  6,  6,  6,  6,  6,  6 },	// Q
+	{  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6 },	// K
+	{  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6 },	// A
+}};
+
+static const Chart known10Chart = {{	// 5 known players (10 cards): max copies for 4x from 6p_preflop_thresholds.md
+	//  2   3   4   5   6   7   8   9   T   J   Q   K   A
+	{  0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  2 },	// 2
+	{ -1,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  2 },	// 3
+	{ -1, -1,  1, -1, -1, -1, -1, -1, -1, -1, -1,  1,  2 },	// 4
+	{ -1, -1, -1,  2, -1, -1, -1, -1, -1, -1,  0,  1,  3 },	// 5
+	{ -1, -1, -1, -1,  2, -1, -1, -1, -1, -1,  0,  1,  3 },	// 6
+	{ -1, -1, -1, -1, -1,  6, -1, -1, -1,  0,  0,  1,  3 },	// 7
+	{ -1, -1, -1, -1, -1, -1,  6, -1,  0,  0,  1,  2,  3 },	// 8
+	{ -1, -1, -1, -1, -1, -1,  0,  6,  0,  1,  1,  2,  3 },	// 9
+	{ -1, -1, -1, -1, -1,  0,  0,  1,  6,  1,  2,  2,  4 },	// T
+	{ -1, -1, -1, -1,  0,  0,  1,  1,  2,  6,  2,  3,  6 },	// J
+	{  0,  0,  0,  1,  1,  1,  2,  2,  2,  2,  6,  3,  6 },	// Q
+	{  1,  1,  1,  2,  2,  2,  2,  3,  3,  3,  3,  6,  6 },	// K
+	{  2,  3,  3,  4,  4,  4,  4,  4,  4,  6,  6,  6,  6 },	// A
+}};
+
+// maxCopies[number of other players whose hole cards are known, 0..5]: only 0 (basic strategy) and 5 (10 known cards)
+// are measured; 1-4 known players use basic strategy until measured. Untested hands in known10Chart keep their basic decision.
+static const std::array<Chart, 6> maxCopies = [] {
+	std::array<Chart, 6> charts;
+	charts.fill(basicChart);
+	charts[5] = known10Chart;
+	return charts;
+}();
+
+bool UltimateTexasHoldem::isPlay4x(const std::vector<poker::Card> &playerHole, const std::vector<poker::Card> &others) {
+	int copies=0;
+	poker::Card::Rank p0, p1;
+	p0 = std::max(playerHole.at(0).rank, playerHole.at(1).rank);
+	p1 = std::min(playerHole.at(0).rank, playerHole.at(1).rank);
+	bool pair = (p0 == p1);
+	bool suited = (playerHole[0].suit == playerHole[1].suit);
+	for (auto &c : others) {
+		if (c.rank == p0) copies++;
+		if (!pair && (c.rank == p1)) copies++;
+	}
+	// known players: 2 hole cards each; anything else (an odd others count, or more than 5 players) uses basic strategy
+	const size_t known = others.size() % 2 == 0 && others.size() / 2 < maxCopies.size() ? others.size() / 2 : 0;
+	return copies <= (suited || pair ? maxCopies[known][p0][p1] : maxCopies[known][p1][p0]);
 }
