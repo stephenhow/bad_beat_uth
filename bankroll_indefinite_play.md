@@ -39,6 +39,10 @@ result X, gives R = 0.002660 per unit. It agrees with the exact solution to with
 lower because a bust usually overshoots below the threshold rather than landing on it.
 (The diffusion approximation 2 * mean / variance = 0.002363 understates R, because the jackpots skew results upward.)
 
+To reproduce (about 3 minutes):
+
+    node analysis/ruin_inf.js bb4x_uth.csv
+
 ## Results
 
 | chance of ever busting out | bankroll (units) | at $100 Antes |
